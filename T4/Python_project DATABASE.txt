@@ -1,0 +1,161 @@
+# Database Schema Creation Queries
+
+CREATE_TABLES_QUERIES = [
+    """
+    CREATE TABLE IF NOT EXISTS class_schedules (
+        schedule_id INT PRIMARY KEY AUTO_INCREMENT,
+        course_id INT,
+        room_id INT,
+        faculty_id INT,
+        day_of_week VARCHAR(10),
+        start_time TIME,
+        end_time TIME,
+        FOREIGN KEY (course_id) REFERENCES courses(course_id),
+        FOREIGN KEY (room_id) REFERENCES rooms(room_id),
+        FOREIGN KEY (faculty_id) REFERENCES faculty(faculty_id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS exams (
+        exam_id INT PRIMARY KEY AUTO_INCREMENT,
+        course_id INT,
+        exam_date DATE,
+        exam_type VARCHAR(50),
+        duration INT,
+        FOREIGN KEY (course_id) REFERENCES courses(course_id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS grades (
+        grade_id INT PRIMARY KEY AUTO_INCREMENT,
+        student_id INT,
+        exam_id INT,
+        score DECIMAL(5,2),
+        grade_letter VARCHAR(2),
+        FOREIGN KEY (student_id) REFERENCES students(student_id),
+        FOREIGN KEY (exam_id) REFERENCES exams(exam_id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS attendance (
+        attendance_id INT PRIMARY KEY AUTO_INCREMENT,
+        student_id INT,
+        course_id INT,
+        date DATE,
+        status ENUM('Present', 'Absent'),
+        FOREIGN KEY (student_id) REFERENCES students(student_id),
+        FOREIGN KEY (course_id) REFERENCES courses(course_id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS fees (
+        fee_id INT PRIMARY KEY AUTO_INCREMENT,
+        student_id INT,
+        fee_type VARCHAR(50),
+        amount DECIMAL(10,2),
+        due_date DATE,
+        payment_status ENUM('Paid', 'Pending', 'Overdue'),
+        FOREIGN KEY (student_id) REFERENCES students(student_id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS faculty (
+        faculty_id INT PRIMARY KEY AUTO_INCREMENT,
+        first_name VARCHAR(50),
+        last_name VARCHAR(50),
+        department VARCHAR(50),
+        email VARCHAR(100),
+        salary DECIMAL(10,2),
+        join_date DATE
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS hostel_rooms (
+        room_id INT PRIMARY KEY AUTO_INCREMENT,
+        room_number VARCHAR(10),
+        capacity INT,
+        current_occupancy INT DEFAULT 0,
+        block VARCHAR(10),
+        room_type VARCHAR(20)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS hostel_enrollment (
+        enrollment_id INT PRIMARY KEY AUTO_INCREMENT,
+        student_id INT,
+        room_id INT,
+        check_in_date DATE,
+        check_out_date DATE,
+        fee_status ENUM('Paid', 'Pending'),
+        FOREIGN KEY (student_id) REFERENCES students(student_id),
+        FOREIGN KEY (room_id) REFERENCES hostel_rooms(room_id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS events (
+        event_id INT PRIMARY KEY AUTO_INCREMENT,
+        event_name VARCHAR(100),
+        event_type VARCHAR(50),
+        start_date DATE,
+        end_date DATE,
+        venue VARCHAR(100),
+        description TEXT,
+        max_participants INT
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS books (
+        book_id INT PRIMARY KEY AUTO_INCREMENT,
+        title VARCHAR(200),
+        author VARCHAR(100),
+        isbn VARCHAR(13),
+        category VARCHAR(50),
+        available_copies INT
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS book_borrowed (
+        borrow_id INT PRIMARY KEY AUTO_INCREMENT,
+        book_id INT,
+        student_id INT,
+        borrow_date DATE,
+        due_date DATE,
+        return_date DATE,
+        FOREIGN KEY (book_id) REFERENCES books(book_id),
+        FOREIGN KEY (student_id) REFERENCES students(student_id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS placements (
+        placement_id INT PRIMARY KEY AUTO_INCREMENT,
+        student_id INT,
+        company_name VARCHAR(100),
+        position VARCHAR(100),
+        package DECIMAL(10,2),
+        offer_date DATE,
+        status VARCHAR(50),
+        FOREIGN KEY (student_id) REFERENCES students(student_id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS notifications (
+        notification_id INT PRIMARY KEY AUTO_INCREMENT,
+        recipient_id INT,
+        recipient_type ENUM('student', 'faculty', 'admin'),
+        message TEXT,
+        date_sent DATETIME,
+        is_read BOOLEAN DEFAULT FALSE
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS feedback (
+        feedback_id INT PRIMARY KEY AUTO_INCREMENT,
+        student_id INT,
+        feedback_type VARCHAR(50),
+        rating INT,
+        comments TEXT,
+        date_submitted DATE,
+        FOREIGN KEY (student_id) REFERENCES students(student_id)
+    )
+    """
+]

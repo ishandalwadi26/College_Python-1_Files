@@ -1,0 +1,190 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
+import mysql.connector
+from mysql.connector import Error
+
+class CollegeManagementSystemGUI:
+    def __init__(self, master):
+        self.master = master
+        self.master.title("College Management System")
+        self.master.geometry("800x600")
+        self.master.configure(bg="#E6F3FF")  # Light blue background
+
+        self.create_db_connection()
+        self.create_widgets()
+
+    def create_db_connection(self):
+        try:
+            self.connection = mysql.connector.connect(
+                host='localhost',
+                user='root',
+                password='your_password',
+                database='college_management'
+            )
+            if self.connection.is_connected():
+                self.cursor = self.connection.cursor(dictionary=True)
+                print("Connected to MySQL database")
+        except Error as e:
+            print(f"Error connecting to MySQL: {e}")
+            messagebox.showerror("Database Error", f"Failed to connect to database: {e}")
+            exit(1)
+
+    def create_widgets(self):
+        # Create a sidebar for navigation
+        self.sidebar = tk.Frame(self.master, width=200, bg="#003366")  # Dark blue sidebar
+        self.sidebar.pack(side=tk.LEFT, fill=tk.Y)
+
+        # Create buttons for different sections
+        sections = ["Students", "Courses", "Attendance", "Exams", "Reports"]
+        for section in sections:
+            btn = tk.Button(self.sidebar, text=section, command=lambda s=section: self.show_section(s),
+                            bg="#0055A4", fg="white", activebackground="#003366", activeforeground="white")
+            btn.pack(fill=tk.X, padx=10, pady=5)
+
+        # Create a content area
+        self.content = tk.Frame(self.master, bg="#E6F3FF")
+        self.content.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+
+        # Welcome message
+        self.welcome_label = tk.Label(self.content, text="Welcome to College Management System",
+                                      font=("Arial", 24), bg="#E6F3FF", fg="#003366")
+        self.welcome_label.pack(pady=50)
+
+    def show_section(self, section):
+        # Clear the content area
+        for widget in self.content.winfo_children():
+            widget.destroy()
+
+        # Show the selected section
+        if section == "Students":
+            self.show_students()
+        elif section == "Courses":
+            self.show_courses()
+        elif section == "Attendance":
+            self.show_attendance()
+        elif section == "Exams":
+            self.show_exams()
+        elif section == "Reports":
+            self.show_reports()
+
+    def show_students(self):
+        # Create a frame for student management
+        student_frame = tk.Frame(self.content, bg="#E6F3FF")
+        student_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+
+        # Title
+        tk.Label(student_frame, text="Student Management", font=("Arial", 18), bg="#E6F3FF", fg="#003366").pack(pady=10)
+
+        # Create input fields
+        fields = ["First Name", "Last Name", "Date of Birth", "Gender", "Email", "Address"]
+        entries = {}
+        for field in fields:
+            row = tk.Frame(student_frame, bg="#E6F3FF")
+            row.pack(fill=tk.X, padx=5, pady=5)
+            tk.Label(row, text=field, width=15, anchor='w', bg="#E6F3FF", fg="#003366").pack(side=tk.LEFT)
+            entry = tk.Entry(row)
+            entry.pack(side=tk.LEFT, expand=True, fill=tk.X)
+            entries[field] = entry
+
+        # Create buttons
+        button_frame = tk.Frame(student_frame, bg="#E6F3FF")
+        button_frame.pack(pady=10)
+        tk.Button(button_frame, text="Add Student", command=lambda: self.add_student(entries),
+                  bg="#0055A4", fg="white").pack(side=tk.LEFT, padx=5)
+        tk.Button(button_frame, text="View Students", command=self.view_students,
+                  bg="#0055A4", fg="white").pack(side=tk.LEFT, padx=5)
+
+    def add_student(self, entries):
+        # Get data from entries
+        data = {field.lower().replace(" ", "_"): entry.get() for field, entry in entries.items()}
+        
+        # Insert into database
+        query = """
+            INSERT INTO students (first_name, last_name, dob, gender, email, address)
+            VALUES (%(first_name)s, %(last_name)s, %(date_of_birth)s, %(gender)s, %(email)s, %(address)s)
+        """
+        try:
+            self.cursor.execute(query, data)
+            self.connection.commit()
+            messagebox.showinfo("Success", "Student added successfully!")
+            # Clear entries
+            for entry in entries.values():
+                entry.delete(0, tk.END)
+        except Error as e:
+            messagebox.showerror("Error", f"Failed to add student: {e}")
+
+    def view_students(self):
+        # Fetch students from database
+        query = "SELECT * FROM students"
+        self.cursor.execute(query)
+        students = self.cursor.fetchall()
+
+        # Create a new window to display students
+        student_window = tk.Toplevel(self.master)
+        student_window.title("Student List")
+        student_window.geometry("600x400")
+
+        # Create a treeview
+        tree = ttk.Treeview(student_window)
+        tree['columns'] = ("ID", "Name", "Email", "Gender")
+
+        tree.column("#0", width=0, stretch=tk.NO)
+        tree.column("ID", anchor=tk.CENTER, width=50)
+        tree.column("Name", anchor=tk.W, width=200)
+        tree.column("Email", anchor=tk.W, width=200)
+        tree.column("Gender", anchor=tk.CENTER, width=100)
+
+        tree.heading("ID", text="ID", anchor=tk.CENTER)
+        tree.heading("Name", text="Name", anchor=tk.W)
+        tree.heading("Email", text="Email", anchor=tk.W)
+        tree.heading("Gender", text="Gender", anchor=tk.CENTER)
+
+        # Insert data
+        for student in students:
+            tree.insert("", tk.END, values=(student['student_id'], 
+                                            f"{student['first_name']} {student['last_name']}", 
+                                            student['email'], 
+                                            student['gender']))
+
+        tree.pack(fill=tk.BOTH, expand=True)
+
+    def show_courses(self):
+        # Similar implementation as show_students, but for courses
+        course_frame = tk.Frame(self.content, bg="#E6F3FF")
+        course_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+
+        tk.Label(course_frame, text="Course Management", font=("Arial", 18), bg="#E6F3FF", fg="#003366").pack(pady=10)
+
+        # Implementation for course management...
+
+    def show_attendance(self):
+        # Implementation for attendance management
+        attendance_frame = tk.Frame(self.content, bg="#E6F3FF")
+        attendance_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+
+        tk.Label(attendance_frame, text="Attendance Management", font=("Arial", 18), bg="#E6F3FF", fg="#003366").pack(pady=10)
+
+        # Implementation for attendance management...
+
+    def show_exams(self):
+        # Implementation for exam management
+        exam_frame = tk.Frame(self.content, bg="#E6F3FF")
+        exam_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+
+        tk.Label(exam_frame, text="Exam Management", font=("Arial", 18), bg="#E6F3FF", fg="#003366").pack(pady=10)
+
+        # Implementation for exam management...
+
+    def show_reports(self):
+        # Implementation for generating reports
+        report_frame = tk.Frame(self.content, bg="#E6F3FF")
+        report_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+
+        tk.Label(report_frame, text="Reports", font=("Arial", 18), bg="#E6F3FF", fg="#003366").pack(pady=10)
+
+        # Implementation for generating reports...
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = CollegeManagementSystemGUI(root)
+    root.mainloop()

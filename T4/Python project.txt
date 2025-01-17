@@ -1,0 +1,450 @@
+import mysql.connector
+from mysql.connector import Error
+from datetime import datetime, timedelta
+import bcrypt
+import random
+
+class Database:
+    def __init__(self):
+        try:
+            self.connection = mysql.connector.connect(
+                host='localhost',
+                user='root',
+                password='your_password',
+                database='college_management'
+            )
+            if self.connection.is_connected():
+                self.cursor = self.connection.cursor(dictionary=True)
+                print("Connected to MySQL database")
+        except Error as e:
+            print(f"Error connecting to MySQL: {e}")
+            exit(1)
+
+    def execute_query(self, query, params=None):
+        try:
+            self.cursor.execute(query, params or ())
+            self.connection.commit()
+            return self.cursor.lastrowid
+        except Error as e:
+            print(f"Error executing query: {e}")
+            self.connection.rollback()
+            return None
+
+    def fetch_all(self, query, params=None):
+        try:
+            self.cursor.execute(query, params or ())
+            return self.cursor.fetchall()
+        except Error as e:
+            print(f"Error fetching data: {e}")
+            return []
+
+    def fetch_one(self, query, params=None):
+        try:
+            self.cursor.execute(query, params or ())
+            return self.cursor.fetchone()
+        except Error as e:
+            print(f"Error fetching data: {e}")
+            return None
+
+class User:
+    def __init__(self, db):
+        self.db = db
+
+    def authenticate(self, username, password):
+        query = "SELECT * FROM users WHERE username = %s"
+        user = self.db.fetch_one(query, (username,))
+        
+        if user and bcrypt.checkpw(password.encode('utf-8'), user['password'].encode('utf-8')):
+            return user
+        return None
+
+    def create_user(self, username, password, role):
+        hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+        query = "INSERT INTO users (username, password, role) VALUES (%s, %s, %s)"
+        return self.db.execute_query(query, (username, hashed.decode('utf-8'), role))
+
+class Student:
+    def __init__(self, db):
+        self.db = db
+
+    def add_student(self, data):
+        query = """
+            INSERT INTO students (first_name, last_name, dob, gender, email, address)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """
+        params = (data['first_name'], data['last_name'], data['dob'],
+                 data['gender'], data['email'], data['address'])
+        return self.db.execute_query(query, params)
+
+    def get_student(self, student_id):
+        query = "SELECT * FROM students WHERE student_id = %s"
+        return self.db.fetch_one(query, (student_id,))
+
+    def update_student(self, student_id, data):
+        query = """
+            UPDATE students 
+            SET first_name = %s, last_name = %s, dob = %s, 
+                gender = %s, email = %s, address = %s
+            WHERE student_id = %s
+        """
+        params = (data['first_name'], data['last_name'], data['dob'],
+                 data['gender'], data['email'], data['address'], student_id)
+        return self.db.execute_query(query, params)
+
+class Course:
+    def __init__(self, db):
+        self.db = db
+
+    def add_course(self, data):
+        query = """
+            INSERT INTO courses (course_name, course_code, credits, department)
+            VALUES (%s, %s, %s, %s)
+        """
+        params = (data['course_name'], data['course_code'],
+                 data['credits'], data['department'])
+        return self.db.execute_query(query, params)
+
+    def assign_faculty(self, course_id, faculty_id):
+        query = """
+            INSERT INTO course_faculty (course_id, faculty_id)
+            VALUES (%s, %s)
+        """
+        return self.db.execute_query(query, (course_id, faculty_id))
+
+class Schedule:
+    def __init__(self, db):
+        self.db = db
+
+    def create_schedule(self, data):
+        query = """
+            INSERT INTO class_schedules 
+            (course_id, room_id, faculty_id, day_of_week, start_time, end_time)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """
+        params = (data['course_id'], data['room_id'], data['faculty_id'],
+                 data['day_of_week'], data['start_time'], data['end_time'])
+        return self.db.execute_query(query, params)
+
+    def get_course_schedule(self, course_id):
+        query = """
+            SELECT cs.*, r.room_number, f.first_name, f.last_name
+            FROM class_schedules cs
+            JOIN rooms r ON cs.room_id = r.room_id
+            JOIN faculty f ON cs.faculty_id = f.faculty_id
+            WHERE cs.course_id = %s
+        """
+        return self.db.fetch_all(query, (course_id,))
+
+class Exam:
+    def __init__(self, db):
+        self.db = db
+
+    def schedule_exam(self, data):
+        query = """
+            INSERT INTO exams (course_id, exam_date, exam_type, duration)
+            VALUES (%s, %s, %s, %s)
+        """
+        params = (data['course_id'], data['exam_date'],
+                 data['exam_type'], data['duration'])
+        return self.db.execute_query(query, params)
+
+    def record_grade(self, data):
+        query = """
+            INSERT INTO grades (student_id, exam_id, score, grade_letter)
+            VALUES (%s, %s, %s, %s)
+        """
+        params = (data['student_id'], data['exam_id'],
+                 data['score'], data['grade_letter'])
+        return self.db.execute_query(query, params)
+
+class Attendance:
+    def __init__(self, db):
+        self.db = db
+
+    def mark_attendance(self, data):
+        query = """
+            INSERT INTO attendance (student_id, course_id, date, status)
+            VALUES (%s, %s, %s, %s)
+        """
+        params = (data['student_id'], data['course_id'],
+                 data['date'], data['status'])
+        return self.db.execute_query(query, params)
+
+    def get_student_attendance(self, student_id, course_id):
+        query = """
+            SELECT * FROM attendance 
+            WHERE student_id = %s AND course_id = %s
+        """
+        return self.db.fetch_all(query, (student_id, course_id))
+
+class Fee:
+    def __init__(self, db):
+        self.db = db
+
+    def create_fee_record(self, data):
+        query = """
+            INSERT INTO fees (student_id, fee_type, amount, due_date, payment_status)
+            VALUES (%s, %s, %s, %s, %s)
+        """
+        params = (data['student_id'], data['fee_type'], data['amount'],
+                 data['due_date'], data['payment_status'])
+        return self.db.execute_query(query, params)
+
+    def update_payment_status(self, fee_id, status):
+        query = "UPDATE fees SET payment_status = %s WHERE fee_id = %s"
+        return self.db.execute_query(query, (status, fee_id))
+
+class Hostel:
+    def __init__(self, db):
+        self.db = db
+
+    def allocate_room(self, data):
+        query = """
+            INSERT INTO hostel_enrollment 
+            (student_id, room_id, check_in_date, fee_status)
+            VALUES (%s, %s, %s, %s)
+        """
+        params = (data['student_id'], data['room_id'],
+                 data['check_in_date'], data['fee_status'])
+        return self.db.execute_query(query, params)
+
+    def check_room_availability(self, room_id):
+        query = """
+            SELECT current_occupancy, capacity 
+            FROM hostel_rooms 
+            WHERE room_id = %s
+        """
+        room = self.db.fetch_one(query, (room_id,))
+        return room['current_occupancy'] < room['capacity'] if room else False
+
+class Library:
+    def __init__(self, db):
+        self.db = db
+
+    def issue_book(self, data):
+        query = """
+            INSERT INTO book_borrowed 
+            (book_id, student_id, borrow_date, due_date)
+            VALUES (%s, %s, %s, %s)
+        """
+        params = (data['book_id'], data['student_id'],
+                 data['borrow_date'], data['due_date'])
+        return self.db.execute_query(query, params)
+
+    def return_book(self, borrow_id):
+        query = """
+            UPDATE book_borrowed 
+            SET return_date = CURRENT_DATE 
+            WHERE borrow_id = %s
+        """
+        return self.db.execute_query(query, (borrow_id,))
+
+class Event:
+    def __init__(self, db):
+        self.db = db
+
+    def create_event(self, data):
+        query = """
+            INSERT INTO events 
+            (event_name, event_type, start_date, end_date, venue, description)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """
+        params = (data['event_name'], data['event_type'], data['start_date'],
+                 data['end_date'], data['venue'], data['description'])
+        return self.db.execute_query(query, params)
+
+    def register_participant(self, event_id, student_id):
+        query = """
+            INSERT INTO event_registrations (event_id, student_id)
+            VALUES (%s, %s)
+        """
+        return self.db.execute_query(query, (event_id, student_id))
+
+class Placement:
+    def __init__(self, db):
+        self.db = db
+
+    def record_placement(self, data):
+        query = """
+            INSERT INTO placements 
+            (student_id, company_name, position, package, offer_date, status)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """
+        params = (data['student_id'], data['company_name'], data['position'],
+                 data['package'], data['offer_date'], data['status'])
+        return self.db.execute_query(query, params)
+
+class Report:
+    def __init__(self, db):
+        self.db = db
+
+    def generate_attendance_report(self, course_id):
+        query = """
+            SELECT s.first_name, s.last_name,
+                   COUNT(CASE WHEN a.status = 'Present' THEN 1 END) as present_count,
+                   COUNT(a.status) as total_classes,
+                   (COUNT(CASE WHEN a.status = 'Present' THEN 1 END) * 100.0 / COUNT(a.status)) as attendance_percentage
+            FROM students s
+            JOIN attendance a ON s.student_id = a.student_id
+            WHERE a.course_id = %s
+            GROUP BY s.student_id
+        """
+        return self.db.fetch_all(query, (course_id,))
+
+    def generate_grade_report(self, course_id):
+        query = """
+            SELECT s.first_name, s.last_name, e.exam_type,
+                   g.score, g.grade_letter
+            FROM students s
+            JOIN grades g ON s.student_id = g.student_id
+            JOIN exams e ON g.exam_id = e.exam_id
+            WHERE e.course_id = %s
+        """
+        return self.db.fetch_all(query, (course_id,))
+
+class CollegeManagementSystem:
+    def __init__(self):
+        self.db = Database()
+        self.user = User(self.db)
+        self.student = Student(self.db)
+        self.course = Course(self.db)
+        self.schedule = Schedule(self.db)
+        self.exam = Exam(self.db)
+        self.attendance = Attendance(self.db)
+        self.fee = Fee(self.db)
+        self.hostel = Hostel(self.db)
+        self.library = Library(self.db)
+        self.event = Event(self.db)
+        self.placement = Placement(self.db)
+        self.report = Report(self.db)
+
+    def login(self, username, password):
+        return self.user.authenticate(username, password)
+
+    def run(self):
+        while True:
+            print("\n=== College Management System ===")
+            print("1. Student Management")
+            print("2. Course Management")
+            print("3. Schedule Management")
+            print("4. Exam Management")
+            print("5. Attendance Management")
+            print("6. Fee Management")
+            print("7. Hostel Management")
+            print("8. Library Management")
+            print("9. Event Management")
+            print("10. Placement Management")
+            print("11. Reports")
+            print("12. Exit")
+
+            choice = input("Enter your choice: ")
+
+            if choice == '1':
+                self.student_menu()
+            elif choice == '2':
+                self.course_menu()
+            elif choice == '3':
+                self.schedule_menu()
+            elif choice == '4':
+                self.exam_menu()
+            elif choice == '5':
+                self.attendance_menu()
+            elif choice == '6':
+                self.fee_menu()
+            elif choice == '7':
+                self.hostel_menu()
+            elif choice == '8':
+                self.library_menu()
+            elif choice == '9':
+                self.event_menu()
+            elif choice == '10':
+                self.placement_menu()
+            elif choice == '11':
+                self.report_menu()
+            elif choice == '12':
+                print("Thank you for using the College Management System!")
+                break
+            else:
+                print("Invalid choice. Please try again.")
+
+    def student_menu(self):
+        while True:
+            print("\n=== Student Management ===")
+            print("1. Add New Student")
+            print("2. View Student Details")
+            print("3. Update Student")
+            print("4. Back to Main Menu")
+
+            choice = input("Enter your choice: ")
+
+            if choice == '1':
+                data = {
+                    'first_name': input("Enter first name: "),
+                    'last_name': input("Enter last name: "),
+                    'dob': input("Enter date of birth (YYYY-MM-DD): "),
+                    'gender': input("Enter gender: "),
+                    'email': input("Enter email: "),
+                    'address': input("Enter address: ")
+                }
+                self.student.add_student(data)
+                print("Student added successfully!")
+
+            elif choice == '2':
+                student_id = input("Enter student ID: ")
+                student = self.student.get_student(student_id)
+                if student:
+                    print("\nStudent Details:")
+                    for key, value in student.items():
+                        print(f"{key}: {value}")
+                else:
+                    print("Student not found!")
+
+            elif choice == '3':
+                student_id = input("Enter student ID: ")
+                data = {
+                    'first_name': input("Enter new first name: "),
+                    'last_name': input("Enter new last name: "),
+                    'dob': input("Enter new date of birth (YYYY-MM-DD): "),
+                    'gender': input("Enter new gender: "),
+                    'email': input("Enter new email: "),
+                    'address': input("Enter new address: ")
+                }
+                self.student.update_student(student_id, data)
+                print("Student updated successfully!")
+
+            elif choice == '4':
+                break
+
+    def course_menu(self):
+        while True:
+            print("\n=== Course Management ===")
+            print("1. Add New Course")
+            print("2. Assign Faculty")
+            print("3. Back to Main Menu")
+
+            choice = input("Enter your choice: ")
+
+            if choice == '1':
+                data = {
+                    'course_name': input("Enter course name: "),
+                    'course_code': input("Enter course code: "),
+                    'credits': input("Enter credits: "),
+                    'department': input("Enter department: ")
+                }
+                self.course.add_course(data)
+                print("Course added successfully!")
+
+            elif choice == '2':
+                course_id = input("Enter course ID: ")
+                faculty_id = input("Enter faculty ID: ")
+                self.course.assign_faculty(course_id, faculty_id)
+                print("Faculty assigned successfully!")
+
+            elif choice == '3':
+                break
+
+    # Similar menu methods for other functionalities...
+
+if __name__ == "__main__":
+    cms = CollegeManagementSystem()
+    cms.run()
